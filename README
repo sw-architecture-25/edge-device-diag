@@ -7,8 +7,6 @@ pip install fastapi uvicorn pyyaml
 
 config.yaml에서 csv_path, db_path 등 경로 확인
 
-csv_path에 timestamp,t1,t2 컬럼을 가진 CSV 준비 (1행=1일 데이터)
-
 프로젝트 루트에서 실행:
 
 python app.py

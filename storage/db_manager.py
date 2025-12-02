@@ -132,7 +132,7 @@ class DBManager:
                 "motor_id": result["motor_id"],
                 "message": message,
                 "severity": severity,
-            )
+            }
 
         self.conn.commit()
         return obs_id, alert_dict

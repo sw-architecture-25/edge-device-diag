@@ -3,7 +3,7 @@ window_size: 30            # 이동평균 윈도우 크기 (최대 최근 30일)
 dynamic_margin: 5.0        # 동적 상한값 Δ (T_a = μ + Δ)
 
 db_path: "edge_data.db"    # SQLite DB 파일 경로
-csv_path: "data/motor_temps.csv"  # 가상 센서 CSV 경로
+csv_path: "data/temperature_2020_2024.csv"  # 가상 센서 CSV 경로
 
 motor_id: "fan_motor_1"    # 기본 대상 모터 ID
 
