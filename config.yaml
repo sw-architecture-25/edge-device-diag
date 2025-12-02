@@ -1,0 +1,16 @@
+# config.yaml
+window_size: 30            # 이동평균 윈도우 크기 (최대 최근 30일)
+dynamic_margin: 5.0        # 동적 상한값 Δ (T_a = μ + Δ)
+
+db_path: "edge_data.db"    # SQLite DB 파일 경로
+csv_path: "data/motor_temps.csv"  # 가상 센서 CSV 경로
+
+motor_id: "fan_motor_1"    # 기본 대상 모터 ID
+
+watchdog_interval_sec: 10  # 워치독 체크 주기(초)
+watchdog_queue_warn_size: 100  # 큐 길이 경고 기준
+
+# 통계알람 품질 요구를 위한 SLA (주석용)
+sla_update_sec: 1          # 새 데이터 입력 후 통계 갱신 목표 시간 (≤1초)
+sla_alert_sec: 3           # 이상 감지 후 GUI 알람 표시 목표 시간 (≤3초)
+
