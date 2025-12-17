@@ -1,4 +1,4 @@
-11. 실행 방법 요약
+###실행 방법 요약
 
 가상환경 + 의존성 설치 (예: FastAPI, uvicorn, pyyaml):
 
@@ -12,7 +12,7 @@ config.yaml에서 csv_path, db_path 등 경로 확인
 python app.py
 
 
-브라우저에서 확인:
+###브라우저에서 확인:
 
 http://localhost:8000/status
 
@@ -24,7 +24,7 @@ PUT /thresholds 로 임계값 수정 (Postman 등 사용)
 
 http://localhost:8000/notify 로 최근 알람 조회
 
-이 코드 구조가 설계 문서의 핵심 요구사항들:
+###이 코드 구조가 설계 문서의 핵심 요구사항들:
 
 Layered Architecture (Sensor / Edge Processing / Storage / UI)
 
@@ -39,3 +39,11 @@ REST DashboardServer
 Edge-First / 로컬 DB / 워치독
 
 을 그대로 반영한 v1 구현입니다.
+
+
+###Test
+pip install pytest pytest-asyncio pyyaml pytest-html matplotlib
+
+app.py 랑 같은 경로에서
+PYTHONPATH=. pytest -v -s --html=report.html --self-contained-html
+
