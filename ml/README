@@ -1,0 +1,52 @@
+pip install pandas numpy scikit-learn joblib tabulate
+
+###train
+$ python cnn_lstm_prewindow_spike.py --csv ../data/temperature_2020_2024.csv --out_dir ./assets_cnn_lstm_keyday --event_col synthetic_event --horizon_days 10 --seq_len 60 --epochs 20
+
+###result
+Total raw rows: 1827
+Positive labels: 13
+Train samples after NaN filter: 974
+[Epoch 1] loss=0.2291
+[Epoch 2] loss=0.0490
+[Epoch 3] loss=0.0481
+[Epoch 4] loss=0.0470
+[Epoch 5] loss=0.0453
+[Epoch 6] loss=0.0419
+[Epoch 7] loss=0.0375
+[Epoch 8] loss=0.0344
+[Epoch 9] loss=0.0308
+[Epoch 10] loss=0.0269
+[Epoch 11] loss=0.0252
+[Epoch 12] loss=0.0262
+[Epoch 13] loss=0.0212
+[Epoch 14] loss=0.0202
+[Epoch 15] loss=0.0223
+[Epoch 16] loss=0.0190
+[Epoch 17] loss=0.0181
+[Epoch 18] loss=0.0154
+[Epoch 19] loss=0.0135
+[Epoch 20] loss=0.0129
+Saved model & dataset
+
+###inference
+$ python cnn_lstm_prewindow_spike_infer_eval_final.py --csv ../data/temperature_2020_2024.csv --model ./assets_cnn_lstm_keyday/cnn_lstm_keyday.pth --out_dir ./assets_cnn_lstm_keyday_eval_final --event_col synthetic_event --seq_len 60 --horizon_days 10 --alpha 10 --cal_w 90 --q_base 0.995 --q_spike 0.99 --z_delta_thr 1.7
+
+###result
+=== DAY-LEVEL CONFUSION (2024) ===
+TP=2, FP=6, TN=358, FN=0
+
+=== EVENT-LEVEL RESULTS ===
+{'event_date': '2024-01-14', 'hit': True, 'first_alert': '2024-01-13', 'lead_days': 1}
+{'event_date': '2024-09-19', 'hit': True, 'first_alert': '2024-09-14', 'lead_days': 5}
+
+=== ALERT EPISODES ===
+2024-01-13 ~ 2024-01-15
+2024-05-10 ~ 2024-05-10
+2024-08-16 ~ 2024-08-16
+2024-09-14 ~ 2024-09-14
+2024-09-19 ~ 2024-09-20
+
+Coverage (2024): 13.42%
+
+Saved: assets_cnn_lstm_keyday_eval_final\temperature_with_alerts.csv

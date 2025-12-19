@@ -1,4 +1,4 @@
-# dashboard/dashboard_server.py
+import os
 import asyncio
 from typing import Dict, List
 
@@ -21,7 +21,8 @@ from .notifier_view import format_alert
 
 
 # === 설정 / 공용 객체 초기화 ===
-config = load_config()
+CONFIG_PATH = os.getenv("CONFIG_PATH", "config.yaml")
+config = load_config(CONFIG_PATH)
 queues = get_queues()
 
 db_manager = DBManager(config["db_path"])
@@ -54,15 +55,11 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# === Pydantic 모델 ===
-
 
 class ThresholdUpdateRequest(BaseModel):
     motor_id: str
-    value: float
-
-
-# === 백그라운드 태스크 ===
+    # 숫자(float) 또는 "dynamic" 문자열을 허용
+    value: object
 
 
 async def analyzer_loop():
@@ -93,6 +90,23 @@ async def input_loop():
     await input_port.run(delay_sec=0.0)
 
 
+def _preload_manual_thresholds_from_db() -> None:
+    """
+    ✅ 서버 시작 시 DB에 저장된 수동 임계값을 ThresholdManager 메모리에 로딩함.
+    - PUT /thresholds는 DB에 저장되지만, 런타임 분석에 적용되려면 ThresholdManager에 주입 필요
+    """
+    try:
+        rows = db_manager.get_thresholds()
+        for r in rows:
+            motor_id = r.get("motor_id")
+            val = r.get("manual_threshold")
+            if motor_id is not None and isinstance(val, (int, float)):
+                threshold_manager.set_manual_threshold(motor_id, float(val))
+    except Exception:
+        # 시작 단계에서 로딩 실패해도 서버는 기동되도록 함 (로그는 운영 환경에서 추가 권장)
+        pass
+
+
 @app.on_event("startup")
 async def on_startup():
     """
@@ -100,6 +114,8 @@ async def on_startup():
     - ingest_q / notify_q / control_q 기반 비동기 파이프라인 실행
     - WatchdogProcess 실행
     """
+    _preload_manual_thresholds_from_db()
+
     loop = asyncio.get_event_loop()
     loop.create_task(input_loop())
     loop.create_task(analyzer_loop())
@@ -107,35 +123,18 @@ async def on_startup():
     loop.create_task(watchdog.run())
 
 
-# === REST API 구현 (ADD71) ===
-
-
 @app.get("/status")
 async def get_status() -> Dict:
-    """
-    GET /status
-    - 최근 이상 판정 요약 조회
-    - 정상/이상 개수, 최근 시각 등
-    """
     return db_manager.get_status_summary()
 
 
 @app.get("/trend")
 async def get_trend(limit: int = 100) -> List[Dict]:
-    """
-    GET /trend
-    - μ, ΔT, T_a, 최종 임계값, 이상 비율 등 시계열 데이터
-    """
     return db_manager.get_trend(limit=limit)
 
 
 @app.get("/thresholds")
 async def get_thresholds() -> List[Dict]:
-    """
-    GET /thresholds
-    - 현재 적용 중인 수동 임계값 목록 조회
-    (YAML에서 기본 설정, thresholds 테이블에서 수동 변경)
-    """
     return db_manager.get_thresholds()
 
 
@@ -145,31 +144,52 @@ async def update_threshold(req: ThresholdUpdateRequest):
     PUT /thresholds
     - 임계치 수정 요청
       → DBManager.update_threshold()
-      → control_q 발행
-      → ThresholdManager에 반영
+      → (즉시) ThresholdManager 메모리 반영
+      → control_q 발행(타 컴포넌트/프로세스가 구독할 경우 대비)
+
+    ✅ 확장:
+      - value에 "dynamic"을 넣으면 수동 임계값을 해제하고 동적 임계값으로 복귀함
     """
-    if req.value <= 0:
+    motor_id = req.motor_id
+
+    # --- dynamic 모드 요청 ---
+    if isinstance(req.value, str) and req.value.strip().lower() == "dynamic":
+        # 1) DB에 sentinel(-1.0)로 저장 (NOT NULL 제약 회피)
+        db_manager.disable_threshold(motor_id)
+
+        # 2) 런타임 메모리에서 제거 → dynamic으로 전환
+        if hasattr(threshold_manager, "clear_manual_threshold"):
+            threshold_manager.clear_manual_threshold(motor_id)
+
+        # 3) 이벤트 발행
+        msg = {"type": "threshold_update", "motor_id": motor_id, "value": "dynamic"}
+        await queues.control_q.put(msg)
+
+        return {"status": "ok", "motor_id": motor_id, "mode": "dynamic"}
+
+    # --- manual 모드(숫자) 요청 ---
+    try:
+        value = float(req.value)
+    except Exception:
+        raise HTTPException(status_code=400, detail="value must be a number or 'dynamic'")
+
+    if value <= 0:
         raise HTTPException(status_code=400, detail="Threshold must be > 0")
 
-    db_manager.update_threshold(req.motor_id, req.value)
+    # 1) DB 영속화
+    db_manager.update_threshold(motor_id, value)
 
-    msg = {
-        "type": "threshold_update",
-        "motor_id": req.motor_id,
-        "value": req.value,
-    }
+    # 2) 런타임 즉시 적용
+    if hasattr(threshold_manager, "set_manual_threshold"):
+        threshold_manager.set_manual_threshold(motor_id, value)
+
+    # 3) 이벤트 발행
+    msg = {"type": "threshold_update", "motor_id": motor_id, "value": value}
     await queues.control_q.put(msg)
 
-    return {"status": "ok", "motor_id": req.motor_id, "value": req.value}
-
+    return {"status": "ok", "motor_id": motor_id, "value": value}
 
 @app.get("/notify")
 async def get_notify(limit: int = 50) -> List[Dict]:
-    """
-    GET /notify
-    - 최근 알림 이벤트 조회
-    - 단순 폴링 방식 (SSE로 확장 가능)
-    """
     alerts = db_manager.get_recent_alerts(limit=limit)
     return [format_alert(a) for a in alerts]
-

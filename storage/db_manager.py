@@ -154,6 +154,22 @@ class DBManager:
         )
         self.conn.commit()
 
+    def disable_threshold(self, motor_id: str):
+        """manual_threshold를 비활성화하여 dynamic 모드로 전환.
+        thresholds.manual_threshold가 NOT NULL이므로 -1.0을 sentinel로 사용함.
+        """
+        now = datetime.utcnow().isoformat()
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO thresholds (motor_id, manual_threshold, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(motor_id) DO UPDATE SET manual_threshold=excluded.manual_threshold, updated_at=excluded.updated_at
+            """,
+            (motor_id, -1.0, now),
+        )
+        self.conn.commit()
+
     def get_thresholds(self) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
         cur.execute("SELECT motor_id, manual_threshold, updated_at FROM thresholds")
@@ -210,11 +226,18 @@ class DBManager:
 
     def get_recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
+        # ✅ 정렬 기준을 ts(관측 시각) 대신 created_at(생성 시각)으로 변경
+        #   - CSV 과거 데이터 재생 시 ts가 과거로 고정되어, 운영자가 최근에 임계값을 바꿔도
+        #     notify 목록이 '관측 시각' 기준으로 뒤섞여 보이는 문제를 방지함
+        # ✅ observation과 조인하여 dynamic/final threshold를 함께 반환 (UI에서 source 표시용)
         cur.execute(
             """
-            SELECT id, observation_id, ts, motor_id, message, severity, created_at
-            FROM alerts
-            ORDER BY ts DESC
+            SELECT
+                a.id, a.observation_id, a.ts, a.motor_id, a.message, a.severity, a.created_at,
+                o.dynamic_threshold, o.final_threshold
+            FROM alerts a
+            LEFT JOIN observations o ON a.observation_id = o.id
+            ORDER BY a.created_at DESC, a.id DESC
             LIMIT ?
         """,
             (limit,),
