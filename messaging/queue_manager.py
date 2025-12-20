@@ -1,4 +1,3 @@
-# messaging/queue_manager.py
 import asyncio
 from dataclasses import dataclass
 
@@ -19,4 +18,3 @@ queue_manager = QueueManager(
 
 def get_queues() -> QueueManager:
     return queue_manager
-

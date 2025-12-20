@@ -1,4 +1,3 @@
-# config.py
 from pathlib import Path
 from typing import Any, Dict
 
@@ -29,4 +28,3 @@ def load_config(path: str = "config.yaml") -> Dict[str, Any]:
             user_cfg = yaml.safe_load(f) or {}
         cfg.update(user_cfg)
     return cfg
-

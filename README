@@ -21,6 +21,10 @@ http://localhost:8000/trend
 http://localhost:8000/thresholds
 
 PUT /thresholds 로 임계값 수정 (Postman 등 사용)
+echo {"motor_id":"fan_motor_1","value":55.0} > body.json
+curl -X PUT "http://localhost:8000/thresholds" -H "Content-Type: application/json" --data-binary "@body.json"
+
+
 
 http://localhost:8000/notify 로 최근 알람 조회
 
